@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'dart:math';
 
 /// 双人报告HTML渲染器
 class DualReportHtmlRenderer {
@@ -40,13 +41,13 @@ class DualReportHtmlRenderer {
     final thisYearFirstChat = reportData['thisYearFirstChat'] as Map<String, dynamic>?;
     buffer.writeln(_buildSection('first-chat', _buildFirstChatBody(firstChat, thisYearFirstChat, myName, friendName)));
 
-    // 第三部分：年度统计
-    final yearlyStats = reportData['yearlyStats'] as Map<String, dynamic>?;
-    buffer.writeln(_buildSection('yearly-stats', _buildYearlyStatsBody(yearlyStats, myName, friendName, reportData['year'] as int?)));
-
-    // 第四部分：常用语（词云）
+    // 第三部分：常用语（词云）
     final wordCloudData = reportData['wordCloud'] as Map<String, dynamic>?;
     buffer.writeln(_buildSection('word-cloud', _buildWordCloudBody(wordCloudData, myName, friendName, reportData['year'] as int?)));
+
+    // 第四部分：年度统计
+    final yearlyStats = reportData['yearlyStats'] as Map<String, dynamic>?;
+    buffer.writeln(_buildSection('yearly-stats', _buildYearlyStatsBody(yearlyStats, myName, friendName, reportData['year'] as int?)));
 
     buffer.writeln('</main>');
 
@@ -345,37 +346,82 @@ section.page.visible .content-wrapper {
 .word-cloud-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px 12px;
   justify-content: center;
   align-items: center;
-  padding: 30px 20px;
-  background: #FFFFFF;
+  align-content: center;
+  padding: 26px 28px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(249,249,249,0.92));
   border-radius: 20px;
-  margin: 24px 0;
+  margin: 20px auto 0;
   border: 1px solid var(--line-color);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+  max-width: 920px;
+  min-height: 120px;
+}
+
+.word-cloud-wrapper {
+  margin: 16px auto 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  max-width: 920px;
+  display: flex;
+  justify-content: center;
+  --cloud-scale: clamp(0.72, 80vw / 520, 1);
+}
+
+.word-cloud-inner {
+  position: relative;
+  width: 520px;
+  height: 520px;
+  margin: 0;
+  border-radius: 50%;
+  transform: scale(var(--cloud-scale));
+  transform-origin: center;
+}
+
+.word-cloud-inner::before {
+  content: "";
+  position: absolute;
+  inset: -6%;
+  background:
+    radial-gradient(circle at 35% 45%, rgba(7, 193, 96, 0.12), transparent 55%),
+    radial-gradient(circle at 65% 50%, rgba(242, 170, 0, 0.1), transparent 58%),
+    radial-gradient(circle at 50% 65%, rgba(0, 0, 0, 0.04), transparent 60%);
+  filter: blur(18px);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .word-tag {
   display: inline-block;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 20px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  line-height: 1.2;
   white-space: nowrap;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, color 0.2s ease;
   cursor: default;
+  color: #2F3437;
+  font-weight: 600;
+  text-shadow: none;
+  opacity: 0;
+  animation: popIn 0.55s ease forwards;
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
 }
 
 .word-tag:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.top-phrases {
-  margin-top: 20px;
-  padding: 20px;
-  background: linear-gradient(135deg, rgba(7, 193, 96, 0.08) 0%, rgba(242, 170, 0, 0.05) 100%);
-  border-radius: 16px;
+  transform: translate(-50%, -50%) scale(1.08);
+  color: var(--primary);
+  z-index: 2;
+  opacity: 1;
 }
 
 .top-phrases-title {
@@ -386,10 +432,54 @@ section.page.visible .content-wrapper {
 }
 
 .top-phrases-list {
-  font-size: 18px;
-  color: var(--primary);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.word-cloud-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #999;
+  text-align: center;
+}
+
+.top-phrases-container {
+  margin: 14px auto 0;
+  padding: 8px 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  max-width: 920px;
+  text-align: center;
+}
+
+.top-badge {
+  background: #F0F2F5;
+  color: #555;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.8;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.top-badge:first-child {
+  background: #E7F9F0;
+  color: #07C160;
+  border-color: rgba(7, 193, 96, 0.4);
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  100% {
+    opacity: var(--final-opacity, 1);
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 ''';
   }
@@ -590,21 +680,13 @@ $thisYearSection
     final yearText = year != null ? '${year}年' : '历史以来';
 
     if (wordCloudData == null) {
-      return '''
-<div class="label-text">常用语</div>
-<div class="hero-title">暂无数据</div>
-<div class="hero-desc">需要足够的文本消息才能生成</div>
-''';
+      return _buildWordCloudEmptyState();
     }
 
     final words = (wordCloudData['words'] as List?) ?? [];
 
     if (words.isEmpty) {
-      return '''
-<div class="label-text">常用语</div>
-<div class="hero-title">暂无数据</div>
-<div class="hero-desc">需要足够的文本消息才能生成</div>
-''';
+      return _buildWordCloudEmptyState();
     }
 
     // 获取最大频率用于计算字体大小
@@ -612,50 +694,118 @@ $thisYearSection
         ? ((words.first as Map)['count'] as int? ?? 1)
         : 1;
 
-    // 构建词云标签（显示前15个）
-    final wordItems = words
-        .take(15)
-        .map((item) {
-          final sentence = _escapeHtml((item as Map)['word']?.toString() ?? '');
-          final count = (item['count'] as int?) ?? 1;
+    final topWords = words.take(32).toList();
+    final rng = Random(42);
+    final placed = <Map<String, double>>[];
+    const baseSize = 520.0;
 
-          // 根据频率计算字体大小 (14px - 28px)
-          final ratio = count / maxCount;
-          final fontSize = (14 + ratio * 14).round();
+    bool canPlace(double x, double y, double w, double h) {
+      final halfW = w / 2;
+      final halfH = h / 2;
+      final dx = x - 50;
+      final dy = y - 50;
+      final dist = sqrt(dx * dx + dy * dy);
+      final maxR = 49 - max(halfW, halfH);
+      if (dist > maxR) return false;
+      const pad = 1.8;
+      for (final p in placed) {
+        final px = p['x']!;
+        final py = p['y']!;
+        final pw = p['w']!;
+        final ph = p['h']!;
+        if ((x - halfW - pad) < (px + pw / 2) &&
+            (x + halfW + pad) > (px - pw / 2) &&
+            (y - halfH - pad) < (py + ph / 2) &&
+            (y + halfH + pad) > (py - ph / 2)) {
+          return false;
+        }
+      }
+      return true;
+    }
 
-          // 根据频率选择颜色
-          String color;
-          if (ratio > 0.65) {
-            color = '#07C160';
-          } else if (ratio > 0.4) {
-            color = '#F2AA00';
-          } else if (ratio > 0.2) {
-            color = '#2F3437';
-          } else {
-            color = '#6B6F73';
-          }
+    // 构建词云标签（显示前32个，避免重叠）
+    final wordItems = <String>[];
+    for (var i = 0; i < topWords.length; i++) {
+      final item = topWords[i];
+      final rawWord = item['word']?.toString() ?? '';
+      final sentence = _escapeHtml(rawWord);
+      final count = (item['count'] as int?) ?? 1;
 
-          return '''
-<span class="word-tag" style="font-size: ${fontSize}px; color: $color;" title="出现 $count 次">$sentence</span>''';
-        })
-        .join('');
+      // 根据频率计算字体大小 (12px - 32px)
+      final ratio = count / maxCount;
+      final fontSize = (12 + pow(ratio, 0.65) * 20).round();
+      final opacity = (0.35 + ratio * 0.65).clamp(0.35, 1.0);
+      final delay = (i * 0.04).toStringAsFixed(2);
+
+      final charCount = max(1, rawWord.runes.length);
+      final hasCjk = RegExp(r'[\u4e00-\u9fff]').hasMatch(rawWord);
+      final hasLatin = RegExp(r'[A-Za-z0-9]').hasMatch(rawWord);
+      final widthFactor = hasCjk && hasLatin
+          ? 0.85
+          : hasCjk
+              ? 0.98
+              : 0.6;
+      final widthPx = fontSize * (charCount * widthFactor);
+      final heightPx = fontSize * 1.1;
+      final widthPct = (widthPx / baseSize) * 100;
+      final heightPct = (heightPx / baseSize) * 100;
+
+      double x = 50;
+      double y = 50;
+      bool placedOk = false;
+      final tries = i == 0 ? 1 : 420;
+      for (var t = 0; t < tries; t++) {
+        if (i == 0) {
+          x = 50;
+          y = 50;
+        } else {
+          final idx = i + t * 0.28;
+          final radius = sqrt(idx) * 7.6 + (rng.nextDouble() * 1.2 - 0.6);
+          final angle = idx * 2.399963 + rng.nextDouble() * 0.35;
+          x = 50 + radius * cos(angle);
+          y = 50 + radius * sin(angle);
+        }
+        if (canPlace(x, y, widthPct, heightPct)) {
+          placedOk = true;
+          break;
+        }
+      }
+      if (!placedOk) continue;
+      placed.add({'x': x, 'y': y, 'w': widthPct, 'h': heightPct});
+
+      wordItems.add('''
+<span class="word-tag" style="--final-opacity: $opacity; left: ${x.toStringAsFixed(2)}%; top: ${y.toStringAsFixed(2)}%; font-size: ${fontSize}px; animation-delay: ${delay}s;" title="出现 $count 次">$sentence</span>''');
+    }
 
     // 获取前3个高频句子
-    final topThree = words
+    final topThree = topWords
         .take(3)
-        .map((item) => _escapeHtml((item as Map)['word']?.toString() ?? ''))
-        .join('、');
+        .map((item) {
+          final sentence = _escapeHtml((item as Map)['word']?.toString() ?? '');
+          return '<span class="top-badge">$sentence</span>';
+        })
+        .join('');
 
     return '''
 <div class="label-text">常用语</div>
 <div class="hero-title">独属于你们的秘密</div>
 <div class="hero-desc">$yearText，你们说得最多的是：</div>
-<div class="word-cloud-container">$wordItems</div>
-<div class="top-phrases">
-  <div class="top-phrases-title">TOP 3 高频句子</div>
+<div class="word-cloud-wrapper">
+  <div class="word-cloud-inner">${wordItems.join()}</div>
+</div>
+<div class="top-phrases-container">
+  <div class="top-phrases-title">你们最爱说的三句话：</div>
   <div class="top-phrases-list">$topThree</div>
 </div>
-<div class="hero-desc" style="margin-top: 20px; font-size: 14px; color: #999;">句子越大、颜色越深，出现频率越高</div>
+<div class="word-cloud-note">颜色越深代表出现频率越高</div>
+''';
+  }
+
+  static String _buildWordCloudEmptyState() {
+    return '''
+<div class="label-text">常用语</div>
+<div class="hero-title">暂无数据</div>
+<div class="hero-desc">需要足够的文本消息才能生成</div>
 ''';
   }
 

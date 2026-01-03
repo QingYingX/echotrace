@@ -219,6 +219,23 @@ class WordCloudService {
     // 只要有至少1个有意义字符即接受
     if (meaningfulChars == 0) return false;
 
+    if (RegExp(r'[\uE000-\uF8FF]').hasMatch(sentence)) {
+      return false;
+    }
+
+    final totalChars = sentence.runes.length;
+    if (totalChars == 0) return false;
+
+    if (totalChars > 4) {
+      if (chineseChars > 0) {
+        if (chineseChars < 2) return false;
+        if ((chineseChars / totalChars) < 0.35) return false;
+      } else {
+        if (englishChars < 3) return false;
+        if (((englishChars + digits) / totalChars) < 0.5) return false;
+      }
+    }
+
     // === 3. 处理重复字符 ===
 
     if (sentence.length > 2) {
@@ -307,6 +324,34 @@ class WordCloudService {
         .where((c) => !c.startsWith('<?xml'))
         .where((c) => !c.contains('<msg>'))
         .where((c) => c.length > 1)
+        .where(_looksReadableForWordCloud)
         .toList();
+  }
+
+  static bool _looksReadableForWordCloud(String text) {
+    if (text.isEmpty) return false;
+
+    final compact = text.replaceAll(
+      RegExp(r'[\s\u00A0\u2000-\u200B\u202F\u205F\u3000]'),
+      '',
+    );
+    if (compact.isEmpty) return false;
+    if (compact.contains('\uFFFD')) return false;
+
+    final total = compact.runes.length;
+    if (total == 0) return false;
+
+    final meaningful = RegExp(r'[\u4e00-\u9fffA-Za-z0-9]')
+        .allMatches(compact)
+        .length;
+    if (meaningful == 0) return false;
+
+    final ratio = meaningful / total;
+    if (total > 4 && ratio < 0.3) return false;
+
+    final privateUse = RegExp(r'[\uE000-\uF8FF]').allMatches(compact).length;
+    if (privateUse / total > 0.2) return false;
+
+    return true;
   }
 }

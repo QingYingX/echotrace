@@ -1792,6 +1792,11 @@ class _DualReportSubPageState extends State<_DualReportSubPage>
   int _topN = 10;
   String _rankingSearchQuery = '';
   ContactRanking? _selectedFriend;
+  List<ContactRanking> _yearRankings = const [];
+  bool _isRankingLoading = false;
+  String? _rankingError;
+  int? _loadedRankingYear;
+  int _rankingLoadToken = 0;
   Map<String, dynamic>? _reportData;
   String? _reportHtml;
   String? _reportUrl;
@@ -2484,6 +2489,7 @@ class _DualReportSubPageState extends State<_DualReportSubPage>
   }
 
   Widget _buildSelectionView() {
+    _scheduleRankingRefreshIfNeeded();
     return ListView(
       key: const ValueKey('dual_report_selection'),
       padding: const EdgeInsets.all(16),
@@ -2512,7 +2518,29 @@ class _DualReportSubPageState extends State<_DualReportSubPage>
   }
 
   Widget _buildRankingCard() {
-    if (widget.rankings.isEmpty) {
+    final targetYear = selectedYear;
+    final usingYearFilter = targetYear != null;
+    final baseRankings = usingYearFilter ? _yearRankings : widget.rankings;
+
+    if (usingYearFilter && _isRankingLoading && _loadedRankingYear != targetYear) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: Text('正在加载该时间范围的排行...')),
+        ),
+      );
+    }
+
+    if (usingYearFilter && _rankingError != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(child: Text(_rankingError!)),
+        ),
+      );
+    }
+
+    if (baseRankings.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -2522,7 +2550,7 @@ class _DualReportSubPageState extends State<_DualReportSubPage>
     }
 
     final query = _rankingSearchQuery.trim().toLowerCase();
-    final filteredRankings = widget.rankings
+    final filteredRankings = baseRankings
         .where(
           (ranking) =>
               !widget.excludedUsernames.contains(
@@ -2641,6 +2669,94 @@ class _DualReportSubPageState extends State<_DualReportSubPage>
         ),
       ),
     );
+  }
+
+  void _scheduleRankingRefreshIfNeeded() {
+    if (!yearConfirmed) return;
+    final targetYear = selectedYear;
+    if (targetYear == null) {
+      if (_loadedRankingYear != null ||
+          _yearRankings.isNotEmpty ||
+          _rankingError != null ||
+          _isRankingLoading) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _yearRankings = const [];
+            _rankingError = null;
+            _isRankingLoading = false;
+            _loadedRankingYear = null;
+          });
+        });
+      }
+      return;
+    }
+
+    if (_loadedRankingYear == targetYear &&
+        !_isRankingLoading &&
+        _rankingError == null) {
+      return;
+    }
+    if (_isRankingLoading) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadRankingsForYear(targetYear);
+    });
+  }
+
+  Future<void> _loadRankingsForYear(int year) async {
+    final token = ++_rankingLoadToken;
+    if (!mounted) return;
+    setState(() {
+      _isRankingLoading = true;
+      _rankingError = null;
+    });
+
+    try {
+      final rankings = <ContactRanking>[];
+      for (final base in widget.rankings) {
+        if (token != _rankingLoadToken) return;
+        final username = base.username;
+        if (username.isEmpty) continue;
+        if (widget.excludedUsernames.contains(username.toLowerCase())) {
+          continue;
+        }
+
+        final stats = await widget.databaseService.getSessionMessageStats(
+          username,
+          filterYear: year,
+        );
+        final total = stats['total'] as int? ?? 0;
+        if (total == 0) continue;
+        rankings.add(
+          ContactRanking(
+            username: username,
+            displayName: base.displayName,
+            messageCount: total,
+            sentCount: stats['sent'] as int? ?? 0,
+            receivedCount: stats['received'] as int? ?? 0,
+            lastMessageTime: base.lastMessageTime,
+          ),
+        );
+      }
+
+      rankings.sort((a, b) => b.messageCount.compareTo(a.messageCount));
+      if (!mounted || token != _rankingLoadToken) return;
+      setState(() {
+        _yearRankings = rankings;
+        _loadedRankingYear = year;
+        _isRankingLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || token != _rankingLoadToken) return;
+      setState(() {
+        _yearRankings = const [];
+        _loadedRankingYear = year;
+        _isRankingLoading = false;
+        _rankingError = '加载该时间范围排行失败: $e';
+      });
+    }
   }
 
   Widget _buildGeneratingView() {

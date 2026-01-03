@@ -1,13 +1,40 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#include <shellapi.h>
+#include <string>
 
 #include "flutter_window.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  std::vector<std::string> command_line_arguments = GetCommandLineArguments();
+  auto set_current_directory_to_executable = []() {
+    wchar_t path[MAX_PATH];
+    const DWORD length = ::GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (length == 0 || length == MAX_PATH) {
+      return;
+    }
+    std::wstring full_path(path, length);
+    const size_t last_slash = full_path.find_last_of(L"\\/");
+    if (last_slash == std::wstring::npos) {
+      return;
+    }
+    const std::wstring exe_dir = full_path.substr(0, last_slash);
+    ::SetCurrentDirectoryW(exe_dir.c_str());
+  };
+
+  set_current_directory_to_executable();
+
+  std::vector<std::string> command_line_arguments;
+  int argc = 0;
+  wchar_t** argv = ::CommandLineToArgvW(::GetCommandLineW(), &argc);
+  if (argv != nullptr) {
+    for (int i = 1; i < argc; i++) {
+      command_line_arguments.push_back(Utf8FromUtf16(argv[i]));
+    }
+    ::LocalFree(argv);
+  }
 
   auto has_cli_flag = [&command_line_arguments]() {
     for (const auto& arg : command_line_arguments) {
