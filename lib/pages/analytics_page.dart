@@ -1289,9 +1289,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final totalForDistribution =
         distribution.values.fold<int>(0, (sum, count) => sum + count);
     final hasMoreTypes = sortedEntries.length > 5;
-    final visibleEntries = _showAllMessageTypes
-        ? sortedEntries
-        : sortedEntries.take(5).toList();
+    final visibleEntries = sortedEntries.take(5).toList();
+    final extraEntries = hasMoreTypes
+        ? sortedEntries.sublist(5)
+        : <MapEntry<String, int>>[];
 
     return Card(
       child: Padding(
@@ -1316,11 +1317,34 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   children: [
                     SizedBox(width: 60, child: Text(entry.key)),
                     Expanded(
-                      child: LinearProgressIndicator(
-                        value: totalForDistribution > 0
-                            ? entry.value / totalForDistribution
-                            : 0,
-                        backgroundColor: Colors.grey[200],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final ratio = totalForDistribution > 0
+                              ? entry.value / totalForDistribution
+                              : 0.0;
+                          final barWidth = constraints.maxWidth * ratio;
+                          return Stack(
+                            children: [
+                              Container(
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              Container(
+                                height: 4,
+                                width: barWidth,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1336,37 +1360,98 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               );
             }),
             if (hasMoreTypes) ...[
-              AnimatedSize(
+              AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                alignment: Alignment.topCenter,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.center,
-                      child: TextButton(
-                        onPressed: () {
-                          setState(
-                            () => _showAllMessageTypes = !_showAllMessageTypes,
-                          );
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedRotation(
-                              turns: _showAllMessageTypes ? 0.5 : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeInOut,
-                              child: const Icon(Icons.expand_more, size: 16),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: child,
+                ),
+                child: _showAllMessageTypes
+                    ? Column(
+                        key: const ValueKey('extra_types'),
+                        children: extraEntries.map((entry) {
+                          final percentage = totalForDistribution > 0
+                              ? (entry.value / totalForDistribution * 100)
+                                  .toStringAsFixed(1)
+                              : '0.0';
+
+                          return Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                SizedBox(width: 60, child: Text(entry.key)),
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final ratio = totalForDistribution > 0
+                                          ? entry.value / totalForDistribution
+                                          : 0.0;
+                                      final barWidth =
+                                          constraints.maxWidth * ratio;
+                                      return Stack(
+                                        children: [
+                                          Container(
+                                            height: 4,
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[200],
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                          Container(
+                                            height: 4,
+                                            width: barWidth,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 80,
+                                  child: Text(
+                                    '${entry.value}\n($percentage%)',
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Text(_showAllMessageTypes ? '收起' : '展开'),
-                          ],
-                        ),
+                          );
+                        }).toList(),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.center,
+                child: TextButton(
+                  onPressed: () {
+                    setState(
+                      () => _showAllMessageTypes = !_showAllMessageTypes,
+                    );
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showAllMessageTypes
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        size: 16,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(_showAllMessageTypes ? '收起' : '展开'),
+                    ],
+                  ),
                 ),
               ),
             ],
